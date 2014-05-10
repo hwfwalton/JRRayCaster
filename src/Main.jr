@@ -1,0 +1,62 @@
+import java.awt.geom.Point2D;
+import java.awt.event.KeyEvent;
+import java.lang.Math;
+
+import edu.ucdavis.jr.JR;
+
+public class Main {
+    
+    private static Player dude;
+    private static Map world;
+    private static Renderer screen;
+    private static Controls controller;
+
+    public static void main(String [] args) {
+        System.out.println("We're up.");
+        
+        double x_start = 6;
+        double y_start = 6;
+        Point2D start_dir = new Point2D.Double(-1, 0); // unit vector pointing up
+        Point2D proj_plane = new Point2D.Double(0, -40./100); 
+
+        boolean gameOn = true;
+
+        world = new Map();
+        dude = new Player(x_start, y_start, start_dir, proj_plane, world); // jack into the matrix!
+        controller = new Controls();
+        screen = new Renderer(world, dude, 600, 480); // not mandude
+		
+        screen.frame.addKeyListener(controller);
+
+        dude.turn(0.000001);
+
+        int updateTick = 100;
+        int renderTick = 1;
+
+        long oldTime;
+        long timeStep;
+        long lastUpdate = 0;
+        long currTime = System.currentTimeMillis();
+        while(gameOn) {
+            oldTime = currTime;
+            currTime = System.currentTimeMillis();
+            timeStep = (currTime - oldTime);
+
+            if (currTime > lastUpdate + updateTick) {
+                //System.out.println("\n****GameTick****\n");
+                update(currTime - lastUpdate);
+                lastUpdate = currTime;
+            }
+
+            //screen.renderFrame( timeStep );
+            screen.renderFrame();
+            //System.out.println("NEW FRAME");
+            JR.nap(renderTick);
+        }
+    }
+
+    public static void update(long timeStep) {
+        System.out.println("\n****GameTick****");
+        dude.roam(timeStep, controller);
+    } 
+}

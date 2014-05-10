@@ -1,0 +1,180 @@
+import java.awt.geom.Point2D;
+import java.lang.Math;
+
+public class Player {
+    public double x;
+    public double y;
+
+    public Point2D dir_vec;
+    public Point2D proj_plane;
+
+    private double nx;
+    private double ny;
+    private double dirx;
+    private double diry;
+    private double nplanex;
+    private double nplaney;
+    private double oldX;
+    private double oldY;
+    private double moveX;
+    private double moveY;
+    private double destX;
+    private double destY;
+    private double stepX;
+    private double stepY;
+
+    private int checkX;
+    private int checkY;
+    private int deltaX;
+    private int deltaY;
+    private int distCheckedX;
+    private int distCheckedY;
+
+    private boolean lTurn;
+    private boolean rTurn;
+    private boolean fMove;
+    private boolean bMove;
+    private boolean lMove;
+    private boolean rMove;
+    //private double r2d2 = (Math.sqrt(2)/2);
+
+    private static Map world;
+    
+    public Player(double x_pos, double y_pos, Point2D start_dir, Point2D start_plane, Map in_world) {
+        x = x_pos;
+        y = y_pos;
+        dir_vec = start_dir;
+        proj_plane = start_plane;
+        world = in_world;
+    }
+
+    public double getAngle() {
+        if (dir_vec.getY() >= 0 ) {
+            return Math.toDegrees(Math.acos((dir_vec.getX()) / (Math.sqrt(Math.pow(dir_vec.getY(),2)+Math.pow(dir_vec.getX(),2)))));
+        } else {
+            return 360-Math.toDegrees(Math.acos((dir_vec.getX()) / (Math.sqrt(Math.pow(dir_vec.getY(),2)+Math.pow(dir_vec.getX(),2)))));
+        }
+    }
+
+    public void roam(long timeStep, Controls controller) {
+        lTurn = controller.getTurnL();
+        rTurn = controller.getTurnR();
+        fMove = controller.getMoveF();
+        bMove = controller.getMoveB();
+        lMove = controller.getMoveL();
+        rMove = controller.getMoveR();
+
+        if (lTurn ^ rTurn) turn((rTurn ? 1 : -1 )*(((Math.PI/24)/100)*timeStep));
+        if (fMove || bMove || lMove || rMove) {
+            //System.out.println("INPUT");
+            move(timeStep*(0.25/100), fMove, bMove, lMove, rMove);
+        }
+    }
+
+    public void turn(double spin) {
+        nplanex = (proj_plane.getX()*Math.cos(spin) - (proj_plane.getY()*Math.sin(spin)));
+        nplaney = (proj_plane.getX()*Math.sin(spin) + (proj_plane.getY()*Math.cos(spin)));
+
+        dirx = (dir_vec.getX()*Math.cos(spin) - (dir_vec.getY()*Math.sin(spin)));
+        diry = (dir_vec.getX()*Math.sin(spin) + (dir_vec.getY() * Math.cos(spin)));
+
+        dir_vec.setLocation(dirx, diry);
+        proj_plane.setLocation(nplanex, nplaney);    
+    }
+
+    public void move(double scale, boolean fMove, boolean bMove, boolean lMove, boolean rMove) {
+        nx = 0;
+        ny = 0;
+        
+        // Forwards or backwards
+        if ((fMove ^ bMove) && (lMove == rMove)) {
+            nx = (fMove ? 1 : -1)*dir_vec.getX();
+            ny = (fMove ? 1 : -1)*dir_vec.getY();
+        }
+
+        // Left or right
+        else if ((fMove == bMove) && (lMove ^ rMove)) {
+            nx = (lMove ? 1 : -1 )*dir_vec.getY();
+            ny = (rMove ? 1 : -1 )*dir_vec.getX();
+        }
+
+        // Diagonals
+        else if ((fMove ^ bMove) && (lMove ^ rMove)) {
+            //nx = Math.cos((180-(Math.atan(dir_vec.getY()/ dir_vec.getX())))-45);
+            //ny = Math.sin((180-(Math.atan(dir_vec.getY()/ dir_vec.getX())))-45);
+            //nx = Math.cos((180-(Math.atan(dir_vec.getY()/ dir_vec.getX())))-45);
+            //ny = Math.sin((180-(Math.atan(dir_vec.getY()/ dir_vec.getX())))-45);
+            //nx = (? 1 : -1)*r2d2;
+            //ny = (? 1 : -1)*r2d2;
+        }
+        destX = x+(nx*scale);
+        destY = y+(ny*scale);
+        deltaX = (destX > x) ? 1 : -1;
+        deltaY = (destY > y) ? 1 : -1;
+        checkX = validX();
+        checkY = validY();
+        
+        if (checkX == checkY && checkX == 0) {
+            //System.out.println("double zero");
+            moveX = nx*scale;
+            moveY = ny*scale;
+        } else if ((checkX == 0) && (checkY != 0)) {
+            //System.out.println("Y hit");
+            moveY = Math.abs(y-checkY);
+            moveX = (nx/ny)*moveY;
+        } else if ((checkY == 0) && (checkX != 0)) {
+            //System.out.println("X hit");
+            moveX = Math.abs(x-checkX);
+            moveY = (ny/nx)*moveX;
+        } else {
+            //System.out.println("ELSE TOOK");
+            moveX = Math.abs(x-checkX);
+            moveY = (ny/nx)*moveX; 
+            if (Math.sqrt(Math.pow(Math.abs(y-checkY),2)+Math.pow((nx/ny)*Math.abs(y-checkY),2))<Math.sqrt(Math.pow(moveX,2)+Math.pow(moveY,2)))
+            {
+                moveY = Math.abs(y-checkY);
+                moveX = (nx/ny)*moveY; 
+            }
+        }
+        x = x + moveX;
+        y = y + moveY;
+    }
+
+    public int validX() {
+        int i = r(x);
+        double j = y;
+        stepY = ny/nx;
+        distCheckedX = 0;
+        while(distCheckedX <= Math.abs(r(x) - r(destX)) ) {
+            System.out.println("Xchecking (x, y): " + i + ", " + j);
+            if ((world.terrain[r(j)][i])==1) {System.out.println("found 1 at (y,x): "+j+","+i); return i;}
+            distCheckedX++;
+            if (deltaX == 1) i++;
+            else i--;
+            if (deltaY == 1) j += stepY;
+            else j -= stepY;
+        }
+        return 0;
+    }
+
+    public int validY() {
+        double i = x;
+        int j = r(y);
+        stepX = nx/ny;
+        distCheckedY = 0;
+        while(distCheckedX < Math.abs(r(x) - r(destX)) ) {
+            System.out.println("Ychecking (x, y): " + i + ", " + j);
+            if ((world.terrain[j][r(i)])==1) {System.out.println("found 1 at (y,x): "+j+","+i); return j;}
+            distCheckedX++;
+            if (deltaX == 1) j++;
+            else j--;
+            if (deltaX == 1) i += stepX;
+            else i -= stepX;
+        }
+        return 0;
+    }
+   
+    public int r(double in){
+        return (int) Math.floor(in);
+    }
+}

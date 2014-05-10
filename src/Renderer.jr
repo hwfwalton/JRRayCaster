@@ -1,0 +1,198 @@
+import java.lang.Math;
+
+import java.awt.geom.*;
+import java.awt.*;
+import javax.swing.*;
+import javax.swing.JComponent;
+
+import edu.ucdavis.jr.JR;
+
+public class Renderer {
+    private Map world;
+    private Player dude;
+	
+    private int width;
+    private int height;
+	private double spin = 0.;
+	private double moveDist = 0.;
+	private double angle;
+    
+	private static int[][] gBuf; // for each X [start, end, tex]
+	
+    private static sem KRAKEN = 0;
+    private static op void ddaHelper(int, Point2D, Point2D, Point2D, double, double, int, int, double, double);
+	private static op void renderHelper(int, Point2D, Point2D, Point2D, int, int, int);
+	private static op void renderPregen(int);
+    private static op void bufWriter(int, double, int);
+    
+	private final int worker_pool = 3;
+    
+	JFrame frame;
+	static SwingSucksAssWhatTheHell content;
+            
+    public Renderer(Map in_world, Player in_dude, int h_res, int v_res) { 
+        world      = in_world;
+        dude       = in_dude;
+        width      = h_res;
+        height     = v_res;
+		
+		setupGfx();
+    }
+    
+	public class SwingSucksAssWhatTheHell extends JPanel {
+		int start, end, color;
+
+		@Override public void paintComponent(Graphics g) {
+			super.paintComponent(g);
+			
+			// paint the packground
+			g.setColor(new Color(25, 150, 200));
+			g.fillRect(0, 0, 600, 240);
+			g.setColor(new Color(200, 40, 25));
+
+			g.drawString("dir_vec's angle: " + dude.dir_vec.toString(), 50, 50);
+			g.drawString("Plane's angle: " + dude.getAngle(), 50, 65);
+			g.drawString("Dude's location: " + dude.x + ", " + dude.y, 50, 80);
+
+			// grab from buffer
+			for(int i = 0; i < width; i++) {
+				start = gBuf[i][0];
+				end   = gBuf[i][1];
+				g.setColor(new Color(200, (end*2-start)%255, 25));
+				g.drawLine(i,start,i,end);
+			}
+		}
+	}     
+
+    private void setupGfx() {
+		gBuf = new int[width][height];
+	
+		frame   = new JFrame("JR CASTER");
+		content = new SwingSucksAssWhatTheHell();
+		content.setPreferredSize(new Dimension(width,height));
+		frame.setContentPane(content);
+		frame.setResizable(false);
+		frame.pack();
+		frame.setVisible(true);
+		frame.toFront();
+		V(KRAKEN); // RELEASE THE KRAKEN!!!
+	}
+	
+    public op void renderFrame() {
+		P(KRAKEN); // go to sleep kraken
+        try {
+            JR.registerQuiescenceAction(pushToBuf); 
+        } catch (edu.ucdavis.jr.QuiescenceRegistrationException e) {
+            e.printStackTrace();
+        }
+
+        for(int col = 0; col < width; col++) {
+            send renderPregen(col);  // WE HAVE IGNITION
+        }
+        //dude.turn(spin);
+        //dude.move(moveDist);
+    }
+
+    public void setSpin (double newSpin) {
+    	spin = newSpin;
+    }
+
+    public void setMove (double newDist) {
+    	moveDist = newDist;
+    }   
+	private static op void pushToBuf() {
+		content.repaint();
+		V(KRAKEN);
+	}
+	
+    private process precalculator((int i = 0; i < worker_pool/3; i++)) {
+        System.out.println("Feeder " + i + " online.");
+		
+		int col;
+        while(true) {
+			// precalculate a bunch of things for the DDA
+            receive renderPregen(col);
+            double cameraX = (double) 2*col / width - 1; // convert our x to the one on our plane of projection                                        
+			Point2D rayPos = new Point2D.Double(dude.x, dude.y); // start at the player's position
+            Point2D rayDir = new Point2D.Double(dude.dir_vec.getX() + dude.proj_plane.getX() * cameraX,
+												dude.dir_vec.getY() + dude.proj_plane.getY() * cameraX);
+            Point2D gridPos  = new Point2D.Double(Math.floor(rayPos.getX()),
+												  Math.floor(rayPos.getY())); 
+            double sideDistX = Math.sqrt(1 + (Math.pow(rayDir.getY(), 2) /
+									         Math.pow(rayDir.getX(), 2)));
+            double sideDistY = Math.sqrt(1 + (Math.pow(rayDir.getX(), 2) /
+											 Math.pow(rayDir.getY(), 2)));
+											 
+			int stepX, stepY;
+			double immDistX, immDistY;
+			
+			if(rayDir.getX() < 0) {
+				stepX = -1;
+				immDistX = (rayPos.getX() - gridPos.getX()) * sideDistX;
+			} else {
+				stepX = 1;
+				immDistX = (gridPos.getX() - rayPos.getX() + 1.0) * sideDistX;
+			}
+			
+			if(rayDir.getY() < 0) {
+				stepY = -1;
+				immDistY = (rayPos.getY() - gridPos.getY()) * sideDistY;
+			} else {
+				stepY = 1;
+				immDistY = (gridPos.getY() - rayPos.getY() + 1.0) * sideDistY;
+			}
+											 
+            send ddaHelper(col, rayPos, rayDir, gridPos, sideDistX, sideDistY, stepX, stepY, immDistX, immDistY);
+        }
+    }
+    
+    private process ddaWorker((int i = 0; i < worker_pool/3; i++)) {
+        System.out.println("DDA worker " + i + " online.");
+		
+		int col, stepX, stepY, side;
+		Point2D rayPos, rayDir, gridPos;
+		double sideDistX, sideDistY, immDistX, immDistY; // distance to immediate x and y sides of square
+
+		while(true) {
+			receive ddaHelper(col, rayPos, rayDir, gridPos, sideDistX, sideDistY, stepX, stepY, immDistX, immDistY);
+			
+			while(true) { // break on hit
+				if (immDistX < immDistY) {
+					immDistX += sideDistX;
+					gridPos.setLocation(gridPos.getX() + stepX, gridPos.getY());
+					side = 0;
+				} else {
+					immDistY += sideDistY;
+					gridPos.setLocation(gridPos.getX(), gridPos.getY() + stepY);
+					side = 1;
+				}
+				if(world.terrain[(int) gridPos.getY()][(int) gridPos.getX()] == 1) break;
+			}
+			
+			send renderHelper(col, gridPos, rayPos, rayDir, stepX, stepY, side);
+		}
+	}
+	
+	private process renderHelper((int i = 0; i < worker_pool/3; i++)) {
+        System.out.println("Renderer " + i + " online.");
+		
+		int col, stepX, stepY, side;
+		double dist;
+		Point2D gridPos, rayPos, rayDir;
+		
+		while(true) {
+			receive renderHelper(col, gridPos, rayPos, rayDir, stepX, stepY, side);
+			
+			if(side == 0) dist = Math.abs((gridPos.getX() - rayPos.getX() + (1 - stepX) / 2.0) / rayDir.getX());
+			else dist = Math.abs((gridPos.getY() - rayPos.getY() + (1 - stepY) / 2.0) / rayDir.getY());
+				
+			int wHeight = Math.abs((int) Math.floor(height / dist));
+			int start   = -wHeight / 2 + height / 2;
+			int end     =  wHeight / 2 + height / 2;
+			if(start < 0) start = 0;
+			if(end >= height) end = height-1;
+			
+			gBuf[col] = new int[]{start, end, 1};
+		}
+	}
+}

@@ -1,0 +1,43 @@
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.lang.Math;
+
+public class Controls extends KeyAdapter {
+	char key;
+	boolean r_turner = false;
+	boolean l_turner = false;
+	boolean f_mover = false;
+	boolean b_mover = false;
+	boolean l_mover = false;
+	boolean r_mover = false;
+
+	public void keyPressed(KeyEvent e) {
+		//System.out.println("Controls: " + key + " pressed");
+		key = e.getKeyChar();
+		if (key == 'j') l_turner = true; // left, neg spin
+		else if (key == 'k') r_turner = true; // right, pos spin
+		else if (key == 'w') f_mover = true; // forwards
+		else if (key == 's') b_mover = true; // backwards
+		else if (key == 'a') l_mover = true; // backwards
+		else if (key == 'd') r_mover = true; // backwards
+        else if (key == 't') System.out.println("T PRESSED");
+	}
+
+	public void keyReleased(KeyEvent e) {
+		//System.out.println("Controls: " + key + " released\n");
+		key = e.getKeyChar();
+		if (key == 'j') l_turner = false; // turn left
+		else if (key == 'k') r_turner = false; // turn right
+		else if (key == 'w') f_mover = false; // forwards
+		else if (key == 's') b_mover = false; // backwards	
+		else if (key == 'a') l_mover = false; // strafe left
+		else if (key == 'd') r_mover = false; // strafe right
+	}
+
+	public boolean getTurnL() { return l_turner; }
+	public boolean getTurnR() { return r_turner; }
+	public boolean getMoveF() { return f_mover; }
+	public boolean getMoveB() { return b_mover; }
+	public boolean getMoveL() { return l_mover; }
+	public boolean getMoveR() { return r_mover; }
+}
