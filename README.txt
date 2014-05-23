@@ -12,4 +12,4 @@ d = strafe right
 j = look left
 k = look right
 
-While the it is currently not in a particularly impressive state, it would be easy to expand it greatly from here. Adding textures would be trivial and the map can be enlarged and customized easily by using node tags.
+Though it is in a somewhat basic state, it would be easy to expand it greatly from here. Textures can be added through the Map class.
